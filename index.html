@@ -1,55 +1,180 @@
-<!-- index.html -->
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Player Cards</title>
+  <title>Game Log Viewer</title>
   <style>
     body {
-      font-family: sans-serif;
+      font-family: "Segoe UI", sans-serif;
+      background-color: #f4f6f8;
+      margin: 0;
       padding: 20px;
+      color: #333;
     }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .tabs {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+
+    .tab {
+      padding: 10px 20px;
+      margin: 0 5px;
+      border: none;
+      background: #e0e0e0;
+      border-radius: 5px 5px 0 0;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background 0.2s;
+    }
+
+    .tab.active {
+      background: #fff;
+      border-bottom: 2px solid white;
+    }
+
+    .tab:hover {
+      background: #d5d5d5;
+    }
+
+    .tab-content {
+      background: #fff;
+      padding: 20px;
+      border-radius: 0 0 8px 8px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    }
+
     .player {
       margin-bottom: 20px;
     }
+
     .player h3 {
-      margin-bottom: 5px;
+      margin-bottom: 8px;
+      color: #2c3e50;
     }
+
     ul {
       list-style-type: none;
       padding-left: 20px;
     }
+
     li {
       margin-bottom: 4px;
+      padding: 4px 8px;
+      background: #f0f0f0;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .hidden {
+      display: none;
     }
   </style>
 </head>
 <body>
   <h1>Game Log Viewer</h1>
-  <div id="content"></div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="game1">Game 1</button>
+    <button class="tab" data-tab="game2">Game 2</button>
+    <button class="tab" data-tab="game3">Game 3</button>
+    <button class="tab" data-tab="full">Full List</button>
+  </div>
+
+  <div id="tabContent" class="tab-content"></div>
+
 <script>
-  window.electronAPI.onUpdateData((data) => {
-    const content = document.getElementById('content');
-    content.innerHTML = '';
-    data.forEach(player => {
+  const tabContent = document.getElementById('tabContent');
+  let currentData = [];
+  let gameMeta = {};
+
+  const renderTab = (tab) => {
+    tabContent.innerHTML = '';
+
+    if (tab === 'full') {
+      currentData.forEach(player => {
+        const playerDiv = document.createElement('div');
+        playerDiv.className = 'player';
+
+        const name = document.createElement('h3');
+        name.textContent = player.userName;
+        playerDiv.appendChild(name);
+
+        const cardList = document.createElement('ul');
+        const allCards = {};
+        ['game1', 'game2', 'game3'].forEach(gameKey => {
+          (player[gameKey] || []).forEach(card => {
+            allCards[card.card] = (allCards[card.card] || 0);
+          });
+        });
+
+        Object.entries(allCards).forEach(([card, occurrence]) => {
+          const li = document.createElement('li');
+          li.textContent = `${card}`;
+          cardList.appendChild(li);
+        });
+
+        playerDiv.appendChild(cardList);
+        tabContent.appendChild(playerDiv);
+      });
+      return;
+    }
+
+    const winner = gameMeta[tab]?.winner;
+    const mulligans = gameMeta[tab]?.mulligans || {};
+
+    currentData.forEach(player => {
       const playerDiv = document.createElement('div');
       playerDiv.className = 'player';
 
       const name = document.createElement('h3');
       name.textContent = player.userName;
+      if (player.userName === winner) {
+        name.textContent += ' 🏆';
+      } else {
+        name.textContent += ' 😢';
+      }
       playerDiv.appendChild(name);
 
+      const mulliganCount = mulligans[player.userName] || 0;
+      const mulliganSpan = document.createElement('div');
+      mulliganSpan.style.fontSize = '0.9em';
+      mulliganSpan.style.color = '#555';
+      mulliganSpan.textContent = `Mulligans: ${mulliganCount}`;
+      playerDiv.appendChild(mulliganSpan);
+
       const cardList = document.createElement('ul');
-      player.game1.forEach(card => {
-        console.log(`Card: ${card}`);
+      const cards = player[tab] || [];
+      cards.forEach(card => {
         const li = document.createElement('li');
-        li.textContent = card.card;
+        li.textContent = `${card.card}`;
         cardList.appendChild(li);
       });
-
       playerDiv.appendChild(cardList);
-      content.appendChild(playerDiv);
+
+      tabContent.appendChild(playerDiv);
     });
+  };
+
+  document.querySelectorAll('.tab').forEach(tabButton => {
+    tabButton.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(btn => btn.classList.remove('active'));
+      tabButton.classList.add('active');
+      renderTab(tabButton.dataset.tab);
+    });
+  });
+
+  window.electronAPI.onUpdateData((data) => {
+    currentData = data.users;
+    gameMeta = data.gameMeta;
+    const activeTab = document.querySelector('.tab.active').dataset.tab;
+    renderTab(activeTab);
   });
 </script>
 

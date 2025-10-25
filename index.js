@@ -32,13 +32,13 @@ app.whenReady().then(() => {
   }
 
   console.log('Watching file for changes:', file);
-
+  const formattedData = formatData(file);
+  mainWindow.webContents.send('update-data', formattedData);
   fs.watchFile(file, { interval: 500 }, (curr, prev) => {
     if (curr.mtime > prev.mtime) {
       console.log('\nFile changed. Re-processing...\n');
       try {
         const formattedData = formatData(file);
-        console.log('Formatted data:', formattedData[0].game1);
         mainWindow.webContents.send('update-data', formattedData);
       } catch (err) {
         console.error('Error reading or formatting file:', err.message);

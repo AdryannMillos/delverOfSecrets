@@ -2,18 +2,31 @@
   "name": "delverofsecrets",
   "version": "1.0.0",
   "main": "index.js",
+  "description": "Delver Of Secrets is a tool to help you manage and retrieve secrets from various sources.",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
     "fast-xml-parser": "^5.2.2"
   },
   "devDependencies": {
-    "electron": "^36.5.0"
+    "electron": "^36.5.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.yourdomain.delverofsecrets",
+    "files": [
+      "**/*"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ]
+    }
   }
 }
