@@ -1,32 +1,26 @@
 {
   "name": "delverofsecrets",
   "version": "1.0.0",
-  "main": "index.js",
-  "description": "Delver Of Secrets is a tool to help you manage and retrieve secrets from various sources.",
+  "description": "",
+  "main": "main/main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "electron .",
-    "dist": "electron-builder"
+    "start": "electron ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AdryannMillos/delverOfSecrets.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/AdryannMillos/delverOfSecrets/issues"
+  },
+  "homepage": "https://github.com/AdryannMillos/delverOfSecrets#readme",
   "dependencies": {
-    "fast-xml-parser": "^5.2.2"
-  },
-  "devDependencies": {
-    "electron": "^36.5.0",
-    "electron-builder": "^26.0.12"
-  },
-  "build": {
-    "appId": "com.yourdomain.delverofsecrets",
-    "files": [
-      "**/*"
-    ],
-    "win": {
-      "target": [
-        "portable"
-      ]
-    }
+    "better-sqlite3": "^12.4.1",
+    "chart.js": "^4.5.1",
+    "electron": "^38.4.0"
   }
 }
