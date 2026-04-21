@@ -61,7 +61,7 @@ export default function OverlayApp() {
   return (
     <div className="overlay">
       <div className="title-bar">
-        <span className="overlay-title">🔮 Delver</span>
+        <span className="overlay-title">🔍 Tireless Tracker</span>
         <div className="window-controls">
           <button onClick={() => window.electronAPI?.minimizeOverlay()}>−</button>
           <button onClick={() => window.electronAPI?.closeOverlay()}>×</button>

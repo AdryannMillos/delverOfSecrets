@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(__dirname, '../../');
 
-test.describe('Delver of Secrets E2E', () => {
+test.describe('Tireless Tracker E2E', () => {
   let app;
   let page;
 

@@ -8,7 +8,7 @@ export default function App() {
   return (
     <div className="app">
       <nav className="sidebar">
-        <div className="logo">🔮 Delver of Secrets</div>
+        <div className="logo">🔍 Tireless Tracker</div>
         <button
           className={`nav-btn ${tab === 'history' ? 'active' : ''}`}
           onClick={() => setTab('history')}
