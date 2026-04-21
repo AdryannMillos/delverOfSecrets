@@ -3,12 +3,18 @@ const path = require('path');
 const { createOverlayWindow } = require('../windows/overlayWindow');
 const formatData = require('../utils/formatData');
 const { getRootLogDir } = require('../utils/paths');
+const db = require('../../db/db');
 
 const overlayWindows = new Map();
+const debounceTimers = new Map();
 
-// --- Exportable recursive finder ---
 function findFilesRecursive(dir, matches = []) {
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return matches;
+  }
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
@@ -20,37 +26,51 @@ function findFilesRecursive(dir, matches = []) {
   return matches;
 }
 
-// --- Start watching logs ---
+function processFile(file, mainWindow) {
+  try {
+    const formatted = formatData(file);
+
+    // Auto-save if there is at least one game with a winner
+    const hasCompletedGame = Object.values(formatted.gameMeta).some(g => g.winner);
+    if (hasCompletedGame && formatted.users.length >= 2) {
+      db.upsertMatch(file, formatted);
+    }
+
+    const payload = {
+      file,
+      timestamp: new Date().toISOString(),
+      data: formatted,
+    };
+
+    let overlay = overlayWindows.get(file);
+    if (!overlay || overlay.isDestroyed()) {
+      overlay = createOverlayWindow(file);
+      overlayWindows.set(file, overlay);
+    }
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('overlay:dataUpdate', payload);
+    }
+    overlay.webContents.send('update-data', payload);
+  } catch (err) {
+    console.error(`Error processing ${file}:`, err);
+  }
+}
+
 function startLogWatcher(mainWindow) {
   const rootDir = getRootLogDir();
   const files = findFilesRecursive(rootDir);
 
   for (const file of files) {
     fs.watchFile(file, { interval: 500 }, (curr, prev) => {
-      if (curr.mtime > prev.mtime) {
-        try {
-          // Format the data
-          const formatted = formatData(file);
-          const payload = {
-            file,
-            timestamp: new Date().toISOString(),
-            data: formatted,
-          };
+      if (curr.mtime <= prev.mtime) return;
 
-          // Create overlay if missing
-          let overlay = overlayWindows.get(file);
-          if (!overlay) {
-            overlay = createOverlayWindow(file);
-            overlayWindows.set(file, overlay);
-          }
-
-          // Send updates
-          mainWindow.webContents.send('overlay:dataUpdate', payload);
-          overlay.webContents.send('update-data', payload);
-        } catch (err) {
-          console.error(`Error formatting ${file}:`, err);
-        }
-      }
+      // Debounce: wait 1500ms after last change before processing
+      if (debounceTimers.has(file)) clearTimeout(debounceTimers.get(file));
+      debounceTimers.set(file, setTimeout(() => {
+        debounceTimers.delete(file);
+        processFile(file, mainWindow);
+      }, 1500));
     });
   }
 }
