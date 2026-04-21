@@ -86,9 +86,10 @@ for (const row of staleMatches) {
 }
 
 function insertTag(name) {
-  const existing = db.prepare('SELECT id FROM tags WHERE name = ?').get(name);
+  const normalized = name.trim().toLowerCase();
+  const existing = db.prepare('SELECT id FROM tags WHERE name = ?').get(normalized);
   if (existing) return existing.id;
-  const info = db.prepare('INSERT INTO tags (name) VALUES (?)').run(name);
+  const info = db.prepare('INSERT INTO tags (name) VALUES (?)').run(normalized);
   return info.lastInsertRowid;
 }
 
@@ -155,7 +156,7 @@ function upsertMatch(sourceFile, parsedData) {
     existing = db.prepare(`
       SELECT DISTINCT m.id FROM matches m
       JOIN games g ON g.match_id = m.id
-      WHERE m.source_file IS NULL AND g.player = ? AND g.opponent = ?
+      WHERE m.source_file IS NULL AND LOWER(g.player) = LOWER(?) AND LOWER(g.opponent) = LOWER(?)
       LIMIT 1
     `).get(player.userName, opponent.userName);
     if (existing) {
@@ -248,7 +249,12 @@ function upsertMatch(sourceFile, parsedData) {
 function updateMatchMeta(id, { playerDeck, opponentDeck, notes, tags } = {}) {
   db.prepare(`
     UPDATE matches SET player_deck = ?, opponent_deck = ?, notes = ? WHERE id = ?
-  `).run(playerDeck || null, opponentDeck || null, notes || null, id);
+  `).run(
+    playerDeck ? playerDeck.trim() : null,
+    opponentDeck ? opponentDeck.trim() : null,
+    notes || null,
+    id
+  );
 
   if (Array.isArray(tags)) {
     db.prepare('DELETE FROM match_tags WHERE match_id = ?').run(id);
@@ -277,23 +283,23 @@ function getMatches(filters = {}) {
     params.push(filters.result);
   }
   if (filters.playerDeck) {
-    conditions.push("m.player_deck LIKE ?");
+    conditions.push("LOWER(m.player_deck) LIKE LOWER(?)");
     params.push(`%${filters.playerDeck}%`);
   }
   if (filters.opponentDeck) {
-    conditions.push("m.opponent_deck LIKE ?");
+    conditions.push("LOWER(m.opponent_deck) LIKE LOWER(?)");
     params.push(`%${filters.opponentDeck}%`);
   }
   if (filters.playerName) {
-    conditions.push("EXISTS (SELECT 1 FROM games g WHERE g.match_id = m.id AND (g.player = ? OR g.opponent = ?))");
+    conditions.push("EXISTS (SELECT 1 FROM games g WHERE g.match_id = m.id AND (LOWER(g.player) = LOWER(?) OR LOWER(g.opponent) = LOWER(?)))");
     params.push(filters.playerName, filters.playerName);
   }
   if (filters.opponent) {
-    conditions.push("EXISTS (SELECT 1 FROM games g WHERE g.match_id = m.id AND g.opponent LIKE ?)");
+    conditions.push("EXISTS (SELECT 1 FROM games g WHERE g.match_id = m.id AND LOWER(g.opponent) LIKE LOWER(?))");
     params.push(`%${filters.opponent}%`);
   }
   if (filters.tag) {
-    conditions.push("EXISTS (SELECT 1 FROM match_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.match_id = m.id AND t.name = ?)");
+    conditions.push("EXISTS (SELECT 1 FROM match_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.match_id = m.id AND t.name = LOWER(?))");
     params.push(filters.tag);
   }
 
@@ -322,39 +328,47 @@ function getStats(filters = {}) {
   const wins = matches.filter(m => {
     const [pw = 0, ow = 0] = (m.final_result || '0-0').split('-').map(Number);
     const game = m.games?.[0];
-    const userIsPlayer = !game || game.player === filters.playerName;
+    const userIsPlayer = !game || game.player.toLowerCase() === (filters.playerName || '').toLowerCase();
     return userIsPlayer ? pw > ow : ow > pw;
   }).length;
   const winRate = total ? Math.round((wins / total) * 100) : 0;
 
-  // Per-opponent stats (always from the logged-in user's perspective)
+  const pn = (filters.playerName || '').toLowerCase();
+
+  // Per-opponent stats — group by lowercased name, display first-seen casing
   const opponentMap = {};
   for (const match of matches) {
     const game = match.games[0];
-    const opponentName = game
-      ? (game.player === filters.playerName ? game.opponent : game.player)
+    const rawName = game
+      ? (game.player.toLowerCase() === pn ? game.opponent : game.player)
       : 'Unknown';
-    if (!opponentMap[opponentName]) opponentMap[opponentName] = { played: 0, won: 0 };
-    opponentMap[opponentName].played++;
-    const [pw] = (match.final_result || '0-0').split('-').map(Number);
-    if (pw > 0) opponentMap[opponentName].won++;
+    const key = rawName.toLowerCase();
+    if (!opponentMap[key]) opponentMap[key] = { display: rawName, played: 0, won: 0 };
+    opponentMap[key].played++;
+    const [pw = 0, ow = 0] = (match.final_result || '0-0').split('-').map(Number);
+    const userIsPlayer = !game || game.player.toLowerCase() === pn;
+    if (userIsPlayer ? pw > ow : ow > pw) opponentMap[key].won++;
   }
-  const perOpponent = Object.entries(opponentMap).map(([name, s]) => ({
-    name,
+  const perOpponent = Object.values(opponentMap).map(s => ({
+    name: s.display,
     played: s.played,
     won: s.won,
     lost: s.played - s.won,
     winRate: Math.round((s.won / s.played) * 100),
   })).sort((a, b) => b.played - a.played);
 
-  // Per-matchup stats (your deck vs opponent deck)
+  // Per-matchup stats — group by lowercased deck names
   const matchupMap = {};
   for (const match of matches) {
-    const key = `${match.player_deck || 'Unknown'} vs ${match.opponent_deck || 'Unknown'}`;
-    if (!matchupMap[key]) matchupMap[key] = { played: 0, won: 0, playerDeck: match.player_deck || 'Unknown', opponentDeck: match.opponent_deck || 'Unknown' };
+    const pd = (match.player_deck || 'Unknown');
+    const od = (match.opponent_deck || 'Unknown');
+    const key = `${pd.toLowerCase()} vs ${od.toLowerCase()}`;
+    if (!matchupMap[key]) matchupMap[key] = { played: 0, won: 0, playerDeck: pd, opponentDeck: od };
     matchupMap[key].played++;
-    const [pw] = (match.final_result || '0-0').split('-').map(Number);
-    if (pw > 0) matchupMap[key].won++;
+    const [pw = 0, ow = 0] = (match.final_result || '0-0').split('-').map(Number);
+    const game = match.games?.[0];
+    const userIsPlayer = !game || game.player.toLowerCase() === pn;
+    if (userIsPlayer ? pw > ow : ow > pw) matchupMap[key].won++;
   }
   const perMatchup = Object.values(matchupMap).map(s => ({
     ...s,
@@ -362,20 +376,28 @@ function getStats(filters = {}) {
     winRate: Math.round((s.won / s.played) * 100),
   })).sort((a, b) => b.played - a.played);
 
-  // Most played decks
+  // Most played decks — group by lowercased name
   const playerDeckMap = {};
   const opponentDeckMap = {};
   for (const match of matches) {
-    const pd = match.player_deck || null;
-    const od = match.opponent_deck || null;
-    if (pd) playerDeckMap[pd] = (playerDeckMap[pd] || 0) + 1;
-    if (od) opponentDeckMap[od] = (opponentDeckMap[od] || 0) + 1;
+    const pd = match.player_deck;
+    const od = match.opponent_deck;
+    if (pd) {
+      const key = pd.toLowerCase();
+      if (!playerDeckMap[key]) playerDeckMap[key] = { display: pd, count: 0 };
+      playerDeckMap[key].count++;
+    }
+    if (od) {
+      const key = od.toLowerCase();
+      if (!opponentDeckMap[key]) opponentDeckMap[key] = { display: od, count: 0 };
+      opponentDeckMap[key].count++;
+    }
   }
-  const mostPlayedDecks = Object.entries(playerDeckMap)
-    .map(([name, count]) => ({ name, count }))
+  const mostPlayedDecks = Object.values(playerDeckMap)
+    .map(({ display, count }) => ({ name: display, count }))
     .sort((a, b) => b.count - a.count);
-  const mostFacedDecks = Object.entries(opponentDeckMap)
-    .map(([name, count]) => ({ name, count }))
+  const mostFacedDecks = Object.values(opponentDeckMap)
+    .map(({ display, count }) => ({ name: display, count }))
     .sort((a, b) => b.count - a.count);
 
   return { total, wins, losses: total - wins, winRate, perOpponent, perMatchup, mostPlayedDecks, mostFacedDecks };
