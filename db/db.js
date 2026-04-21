@@ -1,5 +1,6 @@
 const Database = require('better-sqlite3');
 const path = require('path');
+const fs = require('fs');
 
 const db = new Database(path.join(__dirname, 'mtgo.db'));
 db.pragma('foreign_keys = ON');
@@ -67,8 +68,20 @@ migrateColumn('matches', 'player_deck', 'TEXT');
 migrateColumn('matches', 'opponent_deck', 'TEXT');
 migrateColumn('matches', 'notes', 'TEXT');
 migrateColumn('matches', 'source_file', 'TEXT');
-migrateColumn('matches', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
-migrateColumn('games', 'created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
+migrateColumn('matches', 'created_at', "DATETIME DEFAULT '1970-01-01'");
+migrateColumn('games', 'created_at', "DATETIME DEFAULT '1970-01-01'");
+
+// Backfill created_at for existing matches that have a source_file
+const staleMatches = db.prepare("SELECT id, source_file FROM matches WHERE created_at = '1970-01-01' AND source_file IS NOT NULL").all();
+const backfillStmt = db.prepare("UPDATE matches SET created_at = ? WHERE id = ?");
+for (const row of staleMatches) {
+  try {
+    const mtime = fs.statSync(row.source_file).mtime.toISOString();
+    backfillStmt.run(mtime, row.id);
+  } catch {
+    // file no longer exists — leave as-is
+  }
+}
 
 function insertTag(name) {
   const existing = db.prepare('SELECT id FROM tags WHERE name = ?').get(name);
@@ -102,14 +115,15 @@ function insertGame(game) {
 
 function insertMatch(match) {
   const info = db.prepare(`
-    INSERT INTO matches (game1_id, game2_id, game3_id, final_result, source_file)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO matches (game1_id, game2_id, game3_id, final_result, source_file, created_at)
+    VALUES (?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
   `).run(
     match.game1_id || null,
     match.game2_id || null,
     match.game3_id || null,
     match.final_result || '',
-    match.source_file || null
+    match.source_file || null,
+    match.created_at || null
   );
 
   const matchId = info.lastInsertRowid;
@@ -190,12 +204,18 @@ function upsertMatch(sourceFile, parsedData) {
     gameIds.push(gameId);
   }
 
+  let fileMtime = null;
+  if (sourceFile) {
+    try { fileMtime = fs.statSync(sourceFile).mtime.toISOString(); } catch { /* ignore */ }
+  }
+
   const matchId = insertMatch({
     game1_id: gameIds[0] || null,
     game2_id: gameIds[1] || null,
     game3_id: gameIds[2] || null,
     final_result,
     source_file: sourceFile,
+    created_at: fileMtime,
   });
 
   for (const gameId of gameIds) {
