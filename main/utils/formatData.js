@@ -9,6 +9,9 @@ function formatData(filePath) {
   const userData = {};
   const gameMeta = {};
   const entryRegex = /@P([^\s]+) (?:casts|plays) @\[([^\@]+)@:/g;
+  // Captures non-token cards returning from graveyard via triggered ability.
+  // "graveyard to the battlefield" in the ability text rules out ETB triggers and tokens.
+  const graveyardReturnRegex = /@P([^\s]+) puts a triggered ability from @\[([^\@]+)@:[^)]*graveyard to the battlefield/g;
   const winnerRegex = /@P([^\s]+) wins the game/;
   const mulliganRegex = /@P([^\s]+) mulligans/;
 
@@ -38,19 +41,21 @@ function formatData(filePath) {
         gameMeta[currentGameKey].mulligans[player] = (gameMeta[currentGameKey].mulligans[player] || 0) + 1;
       }
 
+      const recordCard = (player, cardName) => {
+        if (!userData[player]) userData[player] = {};
+        if (!userData[player][currentGameKey]) userData[player][currentGameKey] = {};
+        userData[player][currentGameKey][cardName] = (userData[player][currentGameKey][cardName] || 0) + 1;
+      };
+
       entryRegex.lastIndex = 0;
       let match;
       while ((match = entryRegex.exec(part)) !== null) {
-        const player = match[1];
-        const cardName = match[2];
+        recordCard(match[1], match[2]);
+      }
 
-        if (!userData[player]) {
-          userData[player] = {};
-        }
-        if (!userData[player][currentGameKey]) {
-          userData[player][currentGameKey] = {};
-        }
-        userData[player][currentGameKey][cardName] = (userData[player][currentGameKey][cardName] || 0) + 1;
+      graveyardReturnRegex.lastIndex = 0;
+      while ((match = graveyardReturnRegex.exec(part)) !== null) {
+        recordCard(match[1], match[2]);
       }
     }
   }

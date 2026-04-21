@@ -98,16 +98,8 @@ function startLogWatcher(mainWindow) {
 
   setImmediate(() => syncAllLogsToDB(existingFiles));
 
-  // Watch existing files, and immediately show overlay for any recently-modified one
-  const twelveHoursAgo = Date.now() - 12 * 60 * 60 * 1000;
   for (const file of existingFiles) {
     watchFile(file, mainWindow);
-    try {
-      const mtime = fs.statSync(file).mtimeMs;
-      if (mtime >= twelveHoursAgo) {
-        processFile(file, mainWindow);
-      }
-    } catch { /* ignore */ }
   }
 
   // Watch the directory tree for new .dat files created during new matches
