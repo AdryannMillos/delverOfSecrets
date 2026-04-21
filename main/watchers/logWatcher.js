@@ -6,28 +6,30 @@ const { getRootLogDir } = require('../utils/paths');
 
 const overlayWindows = new Map();
 
-function startLogWatcher(mainWindow) {
-  const rootDir = getRootLogDir();
-  const files = [];
-
-  function findFilesRecursive(dir) {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) findFilesRecursive(fullPath);
-      else if (entry.name.startsWith('Match_GameLog_') && entry.name.endsWith('.dat')) {
-        files.push(fullPath);
-      }
+// --- Exportable recursive finder ---
+function findFilesRecursive(dir, matches = []) {
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      findFilesRecursive(fullPath, matches);
+    } else if (entry.name.startsWith('Match_GameLog_') && entry.name.endsWith('.dat')) {
+      matches.push(fullPath);
     }
   }
+  return matches;
+}
 
-  findFilesRecursive(rootDir);
+// --- Start watching logs ---
+function startLogWatcher(mainWindow) {
+  const rootDir = getRootLogDir();
+  const files = findFilesRecursive(rootDir);
 
   for (const file of files) {
     fs.watchFile(file, { interval: 500 }, (curr, prev) => {
       if (curr.mtime > prev.mtime) {
         try {
-          // Always process through formatData
+          // Format the data
           const formatted = formatData(file);
           const payload = {
             file,
@@ -42,7 +44,7 @@ function startLogWatcher(mainWindow) {
             overlayWindows.set(file, overlay);
           }
 
-          // Send fully formatted data
+          // Send updates
           mainWindow.webContents.send('overlay:dataUpdate', payload);
           overlay.webContents.send('update-data', payload);
         } catch (err) {
@@ -53,4 +55,4 @@ function startLogWatcher(mainWindow) {
   }
 }
 
-module.exports = { startLogWatcher };
+module.exports = { startLogWatcher, findFilesRecursive };

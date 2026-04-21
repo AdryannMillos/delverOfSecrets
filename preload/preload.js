@@ -10,5 +10,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   maximizeOverlay: () => ipcRenderer.send('overlay-maximize'),
   
   getAllGameLogs: () => ipcRenderer.invoke('get-all-game-logs'),
-
+  formatData: (filePath) => ipcRenderer.invoke('format-data', filePath),
+  getMatchDetails: (id) => ipcRenderer.invoke('get-history', id),
 });

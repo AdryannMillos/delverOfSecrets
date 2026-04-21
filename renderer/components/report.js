@@ -1,62 +1,50 @@
-export async function renderReportsTab(container) {
-  const wrapper = document.createElement('div');
-  wrapper.innerHTML = `
+const electronAPI = window.electronAPI;
+
+export function renderReportsTab(container) {
+  container.innerHTML = `
     <h2>Reports</h2>
     <div>
       <label>From: <input type="date" id="fromDate"></label>
       <label>To: <input type="date" id="toDate"></label>
       <button id="generateReport">Generate</button>
     </div>
-    <canvas id="winRateChart"></canvas>
-    <div id="rivalStats"></div>
+    <div id="reportResults"></div>
   `;
-  container.appendChild(wrapper);
 
-  const ctx = wrapper.querySelector('#winRateChart').getContext('2d');
-  const rivalStats = wrapper.querySelector('#rivalStats');
+  async function generateReport() {
+    const from = container.querySelector('#fromDate').value;
+    const to = container.querySelector('#toDate').value;
 
-  wrapper.querySelector('#generateReport').addEventListener('click', async () => {
-    const from = wrapper.querySelector('#fromDate').value;
-    const to = wrapper.querySelector('#toDate').value;
+    const matches = await electronAPI.getHistory({ fromDate: from, toDate: to });
+    const results = {
+      winPercent: 0,
+      biggestRival: null,
+      mostLostAgainst: null,
+      mostWonAgainst: null
+    };
 
-    const history = await window.electronAPI.getHistory();
-    const filtered = history.filter(m => (!from || m.date >= from) && (!to || m.date <= to));
+    // Compute statistics
+    if (matches.length) {
+      const wins = matches.filter(m => m.final_result === 'win').length;
+      results.winPercent = Math.round((wins / matches.length) * 100);
 
-    const winCount = filtered.filter(m => m.result === 'win').length;
-    const lossCount = filtered.filter(m => m.result === 'loss').length;
+      const opponentsCount = {};
+      matches.forEach(m => {
+        m.games.forEach(g => {
+          opponentsCount[g.opponent] = (opponentsCount[g.opponent] || 0) + 1;
+        });
+      });
 
-    // Winrate chart
-    new Chart(ctx, {
-      type: 'doughnut',
-      data: {
-        labels: ['Wins', 'Losses'],
-        datasets: [{
-          data: [winCount, lossCount]
-        }]
-      }
-    });
+      results.biggestRival = Object.entries(opponentsCount).sort((a,b)=>b[1]-a[1])[0]?.[0] || '';
+      // For most lost/won against, could analyze each game
+    }
 
-    // Rivals
-    const rivalMap = {};
-    filtered.forEach(m => {
-      rivalMap[m.opponent] ??= { total: 0, wins: 0, losses: 0 };
-      rivalMap[m.opponent].total++;
-      if (m.result === 'win') rivalMap[m.opponent].wins++;
-      else rivalMap[m.opponent].losses++;
-    });
-
-    const rivals = Object.entries(rivalMap).map(([name, data]) => ({ name, ...data }));
-    rivals.sort((a, b) => b.total - a.total);
-
-    const topRival = rivals[0]?.name || 'N/A';
-    const mostWins = rivals.sort((a, b) => b.wins - a.wins)[0]?.name || 'N/A';
-    const mostLosses = rivals.sort((a, b) => b.losses - a.losses)[0]?.name || 'N/A';
-
-    rivalStats.innerHTML = `
-      <h3>Rival Stats</h3>
-      <p>Most played against: ${topRival}</p>
-      <p>Most wins vs: ${mostWins}</p>
-      <p>Most losses vs: ${mostLosses}</p>
+    const reportDiv = container.querySelector('#reportResults');
+    reportDiv.innerHTML = `
+      <p>Win %: ${results.winPercent}%</p>
+      <p>Biggest Rival: ${results.biggestRival}</p>
     `;
-  });
+  }
+
+  container.querySelector('#generateReport').addEventListener('click', generateReport);
 }
