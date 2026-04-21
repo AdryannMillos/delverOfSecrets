@@ -57,8 +57,9 @@ function processFile(file, mainWindow) {
   }
 }
 
-function syncAllLogsToDB(files) {
+async function syncAllLogsToDB(files) {
   for (const file of files) {
+    await new Promise(resolve => setImmediate(resolve)); // yield between each file
     try {
       const formatted = formatData(file);
       const hasCompletedGame = Object.values(formatted.gameMeta).some(g => g.winner);
@@ -75,8 +76,8 @@ function startLogWatcher(mainWindow) {
   const rootDir = getRootLogDir();
   const files = findFilesRecursive(rootDir);
 
-  // Silently upsert all log files on startup — fixes orphaned records and stale dates
-  syncAllLogsToDB(files);
+  // Run after app is ready so it doesn't block the main process
+  setImmediate(() => syncAllLogsToDB(files));
 
   for (const file of files) {
     fs.watchFile(file, { interval: 500 }, (curr, prev) => {
