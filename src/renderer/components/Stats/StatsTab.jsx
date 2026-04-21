@@ -3,8 +3,12 @@ import { Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend,
 } from 'chart.js';
+import usePagination from '../shared/usePagination';
+import Pagination from '../shared/Pagination';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
+
+const PAGE_SIZE = 10;
 
 function WinrateBar({ rate }) {
   const cls = rate >= 55 ? 'high' : rate < 40 ? 'low' : '';
@@ -12,6 +16,16 @@ function WinrateBar({ rate }) {
     <div className="winrate-bar">
       <div className="bar-track"><div className={`bar-fill ${cls}`} style={{ width: `${rate}%` }} /></div>
       <span style={{ minWidth: 36, textAlign: 'right', fontSize: 12 }}>{rate}%</span>
+    </div>
+  );
+}
+
+function PaginatedTable({ title, children, page, totalPages, hasPrev, hasNext, setPage }) {
+  return (
+    <div className="stats-section">
+      <h3>{title}</h3>
+      {children}
+      <Pagination page={page} totalPages={totalPages} hasPrev={hasPrev} hasNext={hasNext} setPage={setPage} />
     </div>
   );
 }
@@ -26,15 +40,20 @@ export default function StatsTab({ username }) {
     setStats(data);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [username]);
+
+  const oppPag     = usePagination(stats?.perOpponent   ?? [], PAGE_SIZE);
+  const matchupPag = usePagination(stats?.perMatchup     ?? [], PAGE_SIZE);
+  const myDeckPag  = usePagination(stats?.mostPlayedDecks ?? [], PAGE_SIZE);
+  const oppDeckPag = usePagination(stats?.mostFacedDecks  ?? [], PAGE_SIZE);
 
   if (!stats) return <div className="empty-state">Loading stats…</div>;
 
   const chartData = {
-    labels: stats.perOpponent.slice(0, 10).map(o => o.name),
+    labels: oppPag.slice.map(o => o.name),
     datasets: [
-      { label: 'Wins', data: stats.perOpponent.slice(0, 10).map(o => o.won), backgroundColor: '#4caf7d' },
-      { label: 'Losses', data: stats.perOpponent.slice(0, 10).map(o => o.lost), backgroundColor: '#e05555' },
+      { label: 'Wins',   data: oppPag.slice.map(o => o.won),  backgroundColor: '#4caf7d' },
+      { label: 'Losses', data: oppPag.slice.map(o => o.lost), backgroundColor: '#e05555' },
     ],
   };
 
@@ -59,45 +78,23 @@ export default function StatsTab({ username }) {
         </div>
       </div>
 
-      {/* Overview cards */}
+      {/* Overview */}
       <div className="stats-grid">
-        <div className="stat-card">
-          <div className="value">{stats.total}</div>
-          <div className="label">Total Matches</div>
-        </div>
-        <div className="stat-card">
-          <div className="value" style={{ color: 'var(--win)' }}>{stats.wins}</div>
-          <div className="label">Wins</div>
-        </div>
-        <div className="stat-card">
-          <div className="value" style={{ color: 'var(--loss)' }}>{stats.losses}</div>
-          <div className="label">Losses</div>
-        </div>
-        <div className="stat-card">
-          <div className="value">{stats.winRate}%</div>
-          <div className="label">Win Rate</div>
-        </div>
+        <div className="stat-card"><div className="value">{stats.total}</div><div className="label">Total Matches</div></div>
+        <div className="stat-card"><div className="value" style={{ color: 'var(--win)' }}>{stats.wins}</div><div className="label">Wins</div></div>
+        <div className="stat-card"><div className="value" style={{ color: 'var(--loss)' }}>{stats.losses}</div><div className="label">Losses</div></div>
+        <div className="stat-card"><div className="value">{stats.winRate}%</div><div className="label">Win Rate</div></div>
       </div>
 
-      {/* Per-opponent table */}
+      {/* Per-opponent */}
       {stats.perOpponent.length > 0 && (
-        <div className="stats-section">
-          <h3>Results by Opponent</h3>
+        <PaginatedTable title="Results by Opponent" {...oppPag}>
           <table>
-            <thead>
-              <tr>
-                <th>Opponent</th>
-                <th>Played</th>
-                <th>W</th>
-                <th>L</th>
-                <th>Win Rate</th>
-              </tr>
-            </thead>
+            <thead><tr><th>Opponent</th><th>Played</th><th>W</th><th>L</th><th>Win Rate</th></tr></thead>
             <tbody>
-              {stats.perOpponent.map(o => (
+              {oppPag.slice.map(o => (
                 <tr key={o.name}>
-                  <td>{o.name}</td>
-                  <td>{o.played}</td>
+                  <td>{o.name}</td><td>{o.played}</td>
                   <td style={{ color: 'var(--win)' }}>{o.won}</td>
                   <td style={{ color: 'var(--loss)' }}>{o.lost}</td>
                   <td><WinrateBar rate={o.winRate} /></td>
@@ -105,30 +102,18 @@ export default function StatsTab({ username }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </PaginatedTable>
       )}
 
-      {/* Deck matchup table */}
+      {/* Deck matchups */}
       {stats.perMatchup.length > 0 && (
-        <div className="stats-section">
-          <h3>Deck Matchups</h3>
+        <PaginatedTable title="Deck Matchups" {...matchupPag}>
           <table>
-            <thead>
-              <tr>
-                <th>Your Deck</th>
-                <th>vs Opponent Deck</th>
-                <th>Played</th>
-                <th>W</th>
-                <th>L</th>
-                <th>Win Rate</th>
-              </tr>
-            </thead>
+            <thead><tr><th>Your Deck</th><th>vs Opponent Deck</th><th>Played</th><th>W</th><th>L</th><th>Win Rate</th></tr></thead>
             <tbody>
-              {stats.perMatchup.map((m, i) => (
+              {matchupPag.slice.map((m, i) => (
                 <tr key={i}>
-                  <td>{m.playerDeck}</td>
-                  <td>{m.opponentDeck}</td>
-                  <td>{m.played}</td>
+                  <td>{m.playerDeck}</td><td>{m.opponentDeck}</td><td>{m.played}</td>
                   <td style={{ color: 'var(--win)' }}>{m.won}</td>
                   <td style={{ color: 'var(--loss)' }}>{m.lost}</td>
                   <td><WinrateBar rate={m.winRate} /></td>
@@ -136,43 +121,41 @@ export default function StatsTab({ username }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </PaginatedTable>
       )}
 
       {/* Most played decks */}
       {stats.mostPlayedDecks.length > 0 && (
-        <div className="stats-section">
-          <h3>Your Most Played Decks</h3>
+        <PaginatedTable title="Your Most Played Decks" {...myDeckPag}>
           <table>
             <thead><tr><th>Deck</th><th>Matches</th></tr></thead>
             <tbody>
-              {stats.mostPlayedDecks.map(d => (
+              {myDeckPag.slice.map(d => (
                 <tr key={d.name}><td>{d.name}</td><td>{d.count}</td></tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </PaginatedTable>
       )}
 
       {/* Most faced decks */}
       {stats.mostFacedDecks.length > 0 && (
-        <div className="stats-section">
-          <h3>Most Faced Opponent Decks</h3>
+        <PaginatedTable title="Most Faced Opponent Decks" {...oppDeckPag}>
           <table>
             <thead><tr><th>Deck</th><th>Times Faced</th></tr></thead>
             <tbody>
-              {stats.mostFacedDecks.map(d => (
+              {oppDeckPag.slice.map(d => (
                 <tr key={d.name}><td>{d.name}</td><td>{d.count}</td></tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </PaginatedTable>
       )}
 
-      {/* Chart */}
+      {/* Chart — shows current opponent page */}
       {stats.perOpponent.length > 0 && (
         <div className="stats-section">
-          <h3>W/L by Opponent (top 10)</h3>
+          <h3>W/L by Opponent (current page)</h3>
           <div className="chart-wrap">
             <Bar data={chartData} options={chartOptions} />
           </div>
