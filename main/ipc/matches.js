@@ -14,9 +14,9 @@ function registerMatchHandlers() {
   // Save a match manually (used by sync fallback)
   ipcMain.handle('save-match', (_event, matchData) => {
     try {
-      const { users, gameMeta } = matchData;
+      const { users, gameMeta, sourceFile = null } = matchData;
       if (!Array.isArray(users) || users.length < 2) throw new Error('Invalid match data');
-      const matchId = db.upsertMatch(null, { users, gameMeta });
+      const matchId = db.upsertMatch(sourceFile, { users, gameMeta });
       return { success: true, matchId };
     } catch (err) {
       console.error('Error saving match:', err);

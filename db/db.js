@@ -71,8 +71,10 @@ migrateColumn('matches', 'source_file', 'TEXT');
 migrateColumn('matches', 'created_at', "DATETIME DEFAULT '1970-01-01'");
 migrateColumn('games', 'created_at', "DATETIME DEFAULT '1970-01-01'");
 
-// Backfill created_at for existing matches that have a source_file
-const staleMatches = db.prepare("SELECT id, source_file FROM matches WHERE created_at = '1970-01-01' AND source_file IS NOT NULL").all();
+// Backfill created_at for any match whose date looks like the placeholder or epoch
+const staleMatches = db.prepare(
+  "SELECT id, source_file FROM matches WHERE source_file IS NOT NULL AND (created_at IS NULL OR created_at <= '1970-01-02')"
+).all();
 const backfillStmt = db.prepare("UPDATE matches SET created_at = ? WHERE id = ?");
 for (const row of staleMatches) {
   try {
@@ -144,7 +146,25 @@ function upsertMatch(sourceFile, parsedData) {
   const opponentWins = Object.values(gameMeta).filter(g => g.winner === opponent.userName).length;
   const final_result = `${playerWins}-${opponentWins}`;
 
-  const existing = db.prepare('SELECT id FROM matches WHERE source_file = ?').get(sourceFile);
+  let existing = sourceFile
+    ? db.prepare('SELECT id FROM matches WHERE source_file = ?').get(sourceFile)
+    : null;
+
+  // Claim an orphaned record (saved before source_file tracking) by player+opponent match
+  if (!existing && sourceFile) {
+    existing = db.prepare(`
+      SELECT DISTINCT m.id FROM matches m
+      JOIN games g ON g.match_id = m.id
+      WHERE m.source_file IS NULL AND g.player = ? AND g.opponent = ?
+      LIMIT 1
+    `).get(player.userName, opponent.userName);
+    if (existing) {
+      let fileMtime = null;
+      try { fileMtime = fs.statSync(sourceFile).mtime.toISOString(); } catch { /* ignore */ }
+      db.prepare('UPDATE matches SET source_file = ?, created_at = ? WHERE id = ?')
+        .run(sourceFile, fileMtime, existing.id);
+    }
+  }
 
   if (existing) {
     // Delete existing games so we can re-insert fresh parsed data

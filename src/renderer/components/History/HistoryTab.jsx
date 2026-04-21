@@ -22,7 +22,7 @@ export default function HistoryTab() {
     const logs = await window.electronAPI.getAllGameLogs();
     for (const file of logs) {
       const parsed = await window.electronAPI.formatData(file);
-      if (parsed.users.length >= 2) await window.electronAPI.saveMatch(parsed);
+      if (parsed.users.length >= 2) await window.electronAPI.saveMatch({ ...parsed, sourceFile: file });
     }
     await load();
     setSyncing(false);
