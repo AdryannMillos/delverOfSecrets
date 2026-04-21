@@ -284,6 +284,10 @@ function getMatches(filters = {}) {
     conditions.push("m.opponent_deck LIKE ?");
     params.push(`%${filters.opponentDeck}%`);
   }
+  if (filters.playerName) {
+    conditions.push("EXISTS (SELECT 1 FROM games g WHERE g.match_id = m.id AND (g.player = ? OR g.opponent = ?))");
+    params.push(filters.playerName, filters.playerName);
+  }
   if (filters.opponent) {
     conditions.push("EXISTS (SELECT 1 FROM games g WHERE g.match_id = m.id AND g.opponent LIKE ?)");
     params.push(`%${filters.opponent}%`);
@@ -316,15 +320,20 @@ function getStats(filters = {}) {
 
   const total = matches.length;
   const wins = matches.filter(m => {
-    const [pw] = (m.final_result || '0-0').split('-').map(Number);
-    return pw > 0;
+    const [pw = 0, ow = 0] = (m.final_result || '0-0').split('-').map(Number);
+    const game = m.games?.[0];
+    const userIsPlayer = !game || game.player === filters.playerName;
+    return userIsPlayer ? pw > ow : ow > pw;
   }).length;
   const winRate = total ? Math.round((wins / total) * 100) : 0;
 
-  // Per-opponent stats
+  // Per-opponent stats (always from the logged-in user's perspective)
   const opponentMap = {};
   for (const match of matches) {
-    const opponentName = match.games[0]?.opponent || 'Unknown';
+    const game = match.games[0];
+    const opponentName = game
+      ? (game.player === filters.playerName ? game.opponent : game.player)
+      : 'Unknown';
     if (!opponentMap[opponentName]) opponentMap[opponentName] = { played: 0, won: 0 };
     opponentMap[opponentName].played++;
     const [pw] = (match.final_result || '0-0').split('-').map(Number);

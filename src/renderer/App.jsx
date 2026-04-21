@@ -1,9 +1,18 @@
 import React, { useState } from 'react';
 import HistoryTab from './components/History/HistoryTab';
 import StatsTab from './components/Stats/StatsTab';
+import LoginScreen from './components/Login/LoginScreen';
 
 export default function App() {
   const [tab, setTab] = useState('history');
+  const [username, setUsername] = useState(() => localStorage.getItem('mtgo_username') || '');
+
+  const logout = () => {
+    localStorage.removeItem('mtgo_username');
+    setUsername('');
+  };
+
+  if (!username) return <LoginScreen onLogin={setUsername} />;
 
   return (
     <div className="app">
@@ -21,10 +30,14 @@ export default function App() {
         >
           Statistics
         </button>
+        <div className="user-chip">
+          <strong>{username}</strong>
+          <button onClick={logout}>Change username</button>
+        </div>
       </nav>
       <main className="content">
-        {tab === 'history' && <HistoryTab />}
-        {tab === 'stats' && <StatsTab />}
+        {tab === 'history' && <HistoryTab username={username} />}
+        {tab === 'stats' && <StatsTab username={username} />}
       </main>
     </div>
   );

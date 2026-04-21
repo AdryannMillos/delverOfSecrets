@@ -16,13 +16,13 @@ function WinrateBar({ rate }) {
   );
 }
 
-export default function StatsTab() {
+export default function StatsTab({ username }) {
   const [stats, setStats] = useState(null);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
 
   const load = async () => {
-    const data = await window.electronAPI.getStats({ fromDate: from, toDate: to });
+    const data = await window.electronAPI.getStats({ fromDate: from, toDate: to, playerName: username });
     setStats(data);
   };
 

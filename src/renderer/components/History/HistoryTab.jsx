@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import FilterBar from './FilterBar';
 import MatchCard from './MatchCard';
 
-export default function HistoryTab() {
+export default function HistoryTab({ username }) {
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -10,12 +10,12 @@ export default function HistoryTab() {
 
   const load = useCallback(async (f = filters) => {
     setLoading(true);
-    const data = await window.electronAPI.getHistory(f);
+    const data = await window.electronAPI.getHistory({ ...f, playerName: username });
     setMatches(data);
     setLoading(false);
-  }, [filters]);
+  }, [filters, username]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [username]);
 
   const sync = async () => {
     setSyncing(true);
@@ -48,7 +48,7 @@ export default function HistoryTab() {
       ) : (
         <div className="match-list">
           {matches.map(m => (
-            <MatchCard key={m.id} match={m} onRefresh={() => load()} />
+            <MatchCard key={m.id} match={m} username={username} onRefresh={() => load()} />
           ))}
         </div>
       )}

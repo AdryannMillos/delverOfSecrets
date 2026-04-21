@@ -2,28 +2,42 @@ import React, { useState } from 'react';
 import GameDetail from './GameDetail';
 import EditMatchModal from './EditMatchModal';
 
+function getOpponentName(match, username) {
+  const game = match.games?.[0];
+  if (!game) return 'Unknown';
+  return game.player === username ? game.opponent : game.player;
+}
+
+function getUserResult(match, username) {
+  const game = match.games?.[0];
+  if (!game) return match.final_result;
+  const [pw, ow] = (match.final_result || '0-0').split('-').map(Number);
+  // final_result is stored as playerWins-opponentWins from the DB's "player" field perspective
+  return game.player === username ? `${pw}-${ow}` : `${ow}-${pw}`;
+}
+
 function resultBadge(result) {
-  const [pw = 0] = (result || '').split('-').map(Number);
-  if (pw >= 2) return <span className="badge badge-win">{result} W</span>;
-  if (pw === 0) return <span className="badge badge-loss">{result} L</span>;
+  const [w, l] = (result || '0-0').split('-').map(Number);
+  if (w > l) return <span className="badge badge-win">{result} W</span>;
+  if (w < l) return <span className="badge badge-loss">{result} L</span>;
   return <span className="badge badge-unknown">{result}</span>;
 }
 
-export default function MatchCard({ match, onRefresh }) {
+export default function MatchCard({ match, username, onRefresh }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
 
-  const opponent = match.games?.[0]?.opponent || 'Unknown';
-  const player = match.games?.[0]?.player || 'Unknown';
+  const opponent = getOpponentName(match, username);
+  const userResult = getUserResult(match, username);
   const date = match.created_at ? new Date(match.created_at).toLocaleDateString() : '';
 
   return (
     <div className="match-card">
       <div className="match-card-header" onClick={() => setOpen(o => !o)}>
         <div>
-          <div className="match-title">{player} vs {opponent}</div>
+          <div className="match-title">You vs {opponent}</div>
           <div className="match-meta" style={{ marginTop: 4 }}>
-            {resultBadge(match.final_result)}
+            {resultBadge(userResult)}
             {match.player_deck && <span className="badge badge-deck">You: {match.player_deck}</span>}
             {match.opponent_deck && <span className="badge badge-deck">Opp: {match.opponent_deck}</span>}
             {(match.tags || []).map(t => <span key={t} className="badge badge-tag">{t}</span>)}
@@ -42,7 +56,7 @@ export default function MatchCard({ match, onRefresh }) {
         </div>
       </div>
 
-      {open && <GameDetail match={match} />}
+      {open && <GameDetail match={match} username={username} />}
 
       {editing && (
         <EditMatchModal
