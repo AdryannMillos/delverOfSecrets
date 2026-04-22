@@ -2,7 +2,15 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 
-const db = new Database(path.join(__dirname, 'mtgo.db'));
+function getDbPath() {
+  try {
+    const { app } = require('electron');
+    return path.join(app.getPath('userData'), 'mtgo.db');
+  } catch {
+    return path.join(__dirname, 'mtgo.db');
+  }
+}
+const db = new Database(getDbPath());
 db.pragma('foreign_keys = ON');
 
 db.prepare(`

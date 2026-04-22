@@ -18,7 +18,7 @@ function createMainWindow() {
     win.loadURL('http://localhost:5173/src/renderer/index.html');
     win.webContents.openDevTools();
   } else {
-    win.loadFile(path.join(__dirname, '../../dist/renderer/index.html'));
+    win.loadFile(path.join(__dirname, '../../dist/src/renderer/index.html'));
   }
 
   return win;

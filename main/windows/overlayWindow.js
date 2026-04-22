@@ -21,7 +21,7 @@ function createOverlayWindow() {
   if (isDev) {
     win.loadURL('http://localhost:5173/src/overlay/index.html');
   } else {
-    win.loadFile(path.join(__dirname, '../../dist/overlay/index.html'));
+    win.loadFile(path.join(__dirname, '../../dist/src/overlay/index.html'));
   }
 
   return win;
